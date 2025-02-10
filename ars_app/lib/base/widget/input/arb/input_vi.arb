@@ -1,0 +1,16 @@
+{
+  "input_disabled": "Không khả dụng",
+  "input_email_label": "Email",
+  "input_email_hint": "Nhập email",
+  "input_email_helper": "Vd: nguyen@gmail.com",
+  "input_email_error_invalid": "Email không hợp lệ",
+  "input_password_label": "Mật khẩu",
+  "input_password_hint": "Nhập mật khẩu",
+  "input_password_helper": "Mật khẩu nên chứa 8 - 128 ký tự",
+  "input_password_error_too_long": "Mật khẩu quá dài",
+  "input_password_error_too_short": "Mật khẩu quá ngắn",
+  "input_phone_label": "Số điện thoại",
+  "input_phone_hint": "Nhập số điện thoại",
+  "input_phone_helper": "Vd: +84 123456789",
+  "input_phone_error_invalid": "Số điện thoại không hợp lệ"
+}

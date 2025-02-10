@@ -1,0 +1,10 @@
+{
+  "menu_screen_title": "Menu",
+  "menu_screen_setting": "Setting",
+  "menu_screen_appearance": "Appearance",
+  "menu_screen_language": "Language",
+  "menu_screen_account": "Account",
+  "menu_screen_log_in": "Log in",
+  "menu_screen_log_out": "Log out",
+  "menu_screen_sign_up": "Sign up"
+}
