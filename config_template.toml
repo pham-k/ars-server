@@ -1,0 +1,31 @@
+[http]
+host = ""
+port = 8080
+domain = ""
+
+# Relational DB / Postgres
+[rdb]
+host = ""
+port = 5432
+username = ""
+password = ""
+database = ""
+max_open_connections = 25
+max_idle_connections = 25
+max_idle_connection_lifetime = "15m"
+
+# in-memory DB / Redis
+[idb]
+host = ""
+port = 6379
+username = ""
+password = ""
+database = 0
+
+# Mail server
+[smtp]
+host = ""
+port = 2525
+username = ""
+password = ""
+sender = ""
