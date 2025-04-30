@@ -2,6 +2,7 @@ package authn
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-playground/validator/v10"
 	"net/http"
@@ -92,7 +93,17 @@ func LogInWithEmail(ctx context.Context, input RequestLogInWithEmail, log log.Lo
 	}
 	log.Info(fmt.Sprintf("authnToken: %+v", authnToken))
 
-	authnToken.Data = fmt.Sprintf("%v::%v", "userID", user.ID)
+	type authTokenData struct {
+		Object string `json:"object"`
+		ID     int64  `json:"id"`
+		PID    string `json:"pid"`
+	}
+	data, err := json.Marshal(&authTokenData{
+		Object: ObjUser,
+		ID:     user.ID,
+		PID:    user.PID,
+	})
+	authnToken.Data = string(data)
 	log.Info(fmt.Sprintf("authnToken: %+v", authnToken))
 
 	err = tokenService.StoreToken(ctx, authnToken)

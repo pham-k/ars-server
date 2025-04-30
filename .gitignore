@@ -34,3 +34,4 @@ config.toml
 docker/mongo/data/
 docker/redis/data/
 docker/postgres/data/
+docker/secret/*

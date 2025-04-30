@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"server/internal/authn"
 	"server/internal/helper"
@@ -53,12 +54,30 @@ func (s *Server) HandleLogInWithEmail() http.HandlerFunc {
 	}
 }
 
-func (s *Server) ValidateEmail() http.HandlerFunc {
+func (s *Server) HandleValidateEmail() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		token := r.PathValue("token")
 		s.Log.Info(token)
+	}
+}
+
+func (s *Server) HandleLogOut() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		user := s.getContextUser(r)
+		fmt.Printf("%v", user)
+
+		type HealthCheckResponse struct {
+			Status string `json:"status"`
+		}
+
+		helper.WriteJson(w, 200, &HealthCheckResponse{
+			Status: "pass",
+		})
 	}
 }

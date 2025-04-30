@@ -18,7 +18,7 @@ func (s *Server) NewRouter() chi.Router {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
-	r.Use(SecureHeaders)
+	r.Use(s.SecureHeaders)
 	r.Use(middleware.Recoverer)
 
 	// Set a timeout value on the request context (ctx), that will signal
@@ -30,9 +30,9 @@ func (s *Server) NewRouter() chi.Router {
 
 	r.Route("/v1/authn/", func(router chi.Router) {
 		router.Post("/register-with-email", s.HandleRegisterWithEmail())
-		router.Get("/validate-email/{token}", s.ValidateEmail())
+		router.Get("/validate-email/{token}", s.HandleValidateEmail())
 		router.Post("/log-in-with-email", s.HandleLogInWithEmail())
-		//router.Post("/log-out", LogOut(app))
+		router.With(s.Authenticate).Post("/log-out", s.HandleLogOut())
 	})
 
 	return r

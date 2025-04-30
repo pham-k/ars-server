@@ -42,7 +42,7 @@ func main() {
 	}
 
 	// Represent the application
-	m := NewMain(cfg, awsCfg, log)
+	m := NewApp(cfg, awsCfg, log)
 	log.Info("Created application")
 
 	quit := make(chan os.Signal, 1)
@@ -86,8 +86,8 @@ func main() {
 	}
 }
 
-// Main represents the program.
-type Main struct {
+// App represents the program.
+type App struct {
 	// Configuration path and parsed config api.
 	Config     config.Config
 	ConfigPath string
@@ -107,13 +107,13 @@ type Main struct {
 	HTTPServer *server.Server
 }
 
-// NewMain returns a new instance of Main.
-func NewMain(cfg config.Config, awsCfg aws.Config, log logPkg.Log) *Main {
+// NewApp returns a new instance of App.
+func NewApp(cfg config.Config, awsCfg aws.Config, log logPkg.Log) *App {
 	var rDB = rdb.NewDB(cfg, log)
 	var iDB = idb.NewIDB(cfg, log)
 	var kDB = kdb.NewKDB(cfg, log)
 
-	return &Main{
+	return &App{
 		Config:     cfg,
 		ConfigPath: DefaultConfigPath,
 		AwsConfig:  awsCfg,
@@ -127,29 +127,29 @@ func NewMain(cfg config.Config, awsCfg aws.Config, log logPkg.Log) *Main {
 
 // Run executes the program. The configuration should already be set up before
 // calling this function.
-func (m *Main) Run(ctx context.Context) error {
-	m.Log.Info("Running application")
-	if err := m.RDB.Open(); err != nil {
+func (a *App) Run(ctx context.Context) error {
+	a.Log.Info("Running application")
+	if err := a.RDB.Open(); err != nil {
 		return err
 	}
-	if err := m.IDB.Open(); err != nil {
+	if err := a.IDB.Open(); err != nil {
 		return err
 	}
-	if err := m.KDB.Open(); err != nil {
+	if err := a.KDB.Open(); err != nil {
 		return err
 	}
 
 	// Instantiate SQLite-backed services.
-	authnService := authn.NewService(m.Log, m.RDB)
-	tokenService := token.NewService(m.Log, m.IDB)
+	authnService := authn.NewService(a.Log, a.RDB)
+	tokenService := token.NewService(a.Log, a.IDB)
 
 	// Attach underlying services to the HTTP server.
-	m.HTTPServer.Log = m.Log
-	m.HTTPServer.AuthnService = authnService
-	m.HTTPServer.TokenService = tokenService
+	a.HTTPServer.Log = a.Log
+	a.HTTPServer.AuthnService = authnService
+	a.HTTPServer.TokenService = tokenService
 
 	// Start the HTTP server.
-	if err := m.HTTPServer.Open(); err != nil {
+	if err := a.HTTPServer.Open(); err != nil {
 		return err
 	}
 
@@ -157,28 +157,28 @@ func (m *Main) Run(ctx context.Context) error {
 }
 
 // Terminate gracefully stops the program.
-func (m *Main) Terminate() error {
-	m.Log.Info("Start termination sequence")
-	if m.HTTPServer != nil {
-		err := m.HTTPServer.Shutdown()
+func (a *App) Terminate() error {
+	a.Log.Info("Start termination sequence")
+	if a.HTTPServer != nil {
+		err := a.HTTPServer.Shutdown()
 		if err != nil {
 			return err
 		}
 	}
 
-	if m.RDB != nil {
-		if err := m.RDB.Close(); err != nil {
+	if a.RDB != nil {
+		if err := a.RDB.Close(); err != nil {
 			return err
 		}
 	}
 
-	if m.KDB != nil {
-		if err := m.KDB.Close(); err != nil {
+	if a.KDB != nil {
+		if err := a.KDB.Close(); err != nil {
 			return err
 		}
 	}
 
-	m.Log.Info("Finish termination sequence")
+	a.Log.Info("Finish termination sequence")
 	return nil
 }
 
@@ -186,10 +186,10 @@ func (m *Main) Terminate() error {
 //
 // This exists separately from the Run() function so that we can skip it
 // during end-to-end tests. Those tests will configure manually and call Run().
-func (m *Main) ParseFlags(args []string) error {
+func (a *App) ParseFlags(args []string) error {
 	// Our flag set is very simple. It only includes a config path.
 	fs := flag.NewFlagSet("main", flag.ContinueOnError)
-	fs.StringVar(&m.ConfigPath, "config", DefaultConfigPath, "config path")
+	fs.StringVar(&a.ConfigPath, "config", DefaultConfigPath, "config path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -197,22 +197,22 @@ func (m *Main) ParseFlags(args []string) error {
 	// The expand() function is here to automatically expand "~" to the user's
 	// home directory. This is a common task as configuration files are typing
 	// under the home directory during local development.
-	configPath, err := expand(m.ConfigPath)
+	configPath, err := expand(a.ConfigPath)
 	if err != nil {
 		return err
 	}
 
 	// Read our TOML formatted configuration file.
-	cfg, err := config.NewConfig(configPath, m.Log)
+	cfg, err := config.NewConfig(configPath, a.Log)
 	if os.IsNotExist(err) {
-		m.Log.Error(fmt.Sprintf("Config file not found at %s", m.ConfigPath))
+		a.Log.Error(fmt.Sprintf("Config file not found at %s", a.ConfigPath))
 		return err
 	} else if err != nil {
-		m.Log.Error("Fail to parse flags", err)
+		a.Log.Error("Fail to parse flags", err)
 		return err
 	}
-	m.Config = cfg
-	m.Log.Info("Parse config")
+	a.Config = cfg
+	a.Log.Info("Parse config")
 	return nil
 }
 

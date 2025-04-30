@@ -102,7 +102,7 @@ func (s service) newUserPID() (string, error) {
 	return pID, nil
 }
 
-//func (s service) ValidateEmail(ctx context.Context, token string) (bool, error) {
+//func (s service) HandleValidateEmail(ctx context.Context, token string) (bool, error) {
 //	repo, tx, err := s.rDB.NewRepoWithTx()
 //	if err != nil {
 //		return false, err
@@ -125,7 +125,7 @@ func (s service) newUserPID() (string, error) {
 //		return false, errors.New("multiple authn email")
 //	}
 //
-//	activated, err := repo.ValidateEmail(ctx, authnEmail[0].Email)
+//	activated, err := repo.HandleValidateEmail(ctx, authnEmail[0].Email)
 //	if err != nil {
 //		return false, err
 //	}
