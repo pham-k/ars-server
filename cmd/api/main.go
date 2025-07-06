@@ -4,57 +4,51 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"os/user"
 	"path/filepath"
-	"server/internal/authn"
-	"server/internal/config"
-	"server/internal/db/idb"
-	"server/internal/db/kdb"
-	"server/internal/db/rdb"
-	logPkg "server/internal/log"
+	cachePkg "server/internal/core/cache"
+	configPkg "server/internal/core/config"
+	"server/internal/core/database"
+	ce "server/internal/core/error"
+	"server/internal/core/kdb"
+	loggerPkg "server/internal/core/logger"
 	"server/internal/server"
-	"server/internal/token"
 	"strings"
 	"syscall"
 )
 
 const (
 	DefaultConfigPath = "."
+	DefaultAwsRegion  = "us-west-2"
 )
 
 func main() {
 	// Setup signal handlers.
 	ctx, cancel := context.WithCancel(context.Background())
-	log := logPkg.NewLog()
+	loggerPkg.InitializeGlobalLogger()
 
 	// Get config
-	cfg, err := config.NewConfig(DefaultConfigPath, log)
+	config, err := configPkg.NewConfig(DefaultConfigPath)
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.TODO(),
-		awsconfig.WithRegion("us-west-2"),
-	)
-	if err != nil {
-		log.Error("Load AWS config", "error", err)
-	}
+	// TODO reconfigure logger
+	logger := zap.L()
 
-	// Represent the application
-	m := NewMain(cfg, awsCfg, log)
-	log.Info("Created application")
+	app := NewApplication(config)
+	logger.Info("Created application")
 
 	quit := make(chan os.Signal, 1)
 	go func() {
 		// Intercept the signals, as before.
 		signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-		log.Info("Waiting for quit signal")
+		logger.Info("Waiting for quit signal")
 
 		sig := <-quit
-		log.Info(fmt.Sprintf("Caught signal %v", sig.String()))
+		logger.Info(fmt.Sprintf("Caught signal %v", sig.String()))
 
-		err := m.Terminate()
+		err := app.Terminate()
 		if err != nil {
 			cancel()
 			os.Exit(1)
@@ -63,93 +57,73 @@ func main() {
 		os.Exit(0)
 	}()
 
-	err = m.Run(ctx)
+	err = app.Run()
 	if err != nil {
-		log.Error("Fail to run application", "error", err)
-		stopErr := m.Terminate()
+		logger.Error("Run application", zap.Error(err),
+			zap.String("context", err.GetOp()))
+		stopErr := app.Terminate()
 		if stopErr != nil {
-			log.Error("Fail to run application", "error", err)
+			logger.Error("Fail to run application", zap.Error(err))
 			os.Exit(1)
 		}
 		os.Exit(1)
 	}
 
 	// Wait for CTRL-C.
-	log.Info("here 2")
 	<-ctx.Done()
-	log.Info("here 3")
 
-	// Clean up program.
-	if stopErr := m.Terminate(); stopErr != nil {
-		log.Error("Fail to stop application", "error", stopErr)
+	// Cleanup program.
+	if stopErr := app.Terminate(); stopErr != nil {
+		logger.Error("Fail to stop application", zap.Error(err))
 		os.Exit(1)
 	}
 }
 
-// Main represents the program.
-type Main struct {
-	// Configuration path and parsed config api.
-	Config     config.Config
+// Application represents the program.
+type Application struct {
 	ConfigPath string
-	AwsConfig  aws.Config
+	Config     configPkg.Config
 
-	Log logPkg.Log
+	logger *zap.Logger
 
-	// Relational storage
-	RDB rdb.RDB
-	// In-memory  storage
-	IDB idb.IDB
-	// Key-value storage
-	KDB kdb.KDB
+	Database    database.Database
+	Cache       cachePkg.Cache
+	KeyValStore kdb.KeyValStore
 
-	// HTTP server for handling HTTP communication.
-	// Postgres' services are attached to it before running.
 	HTTPServer *server.Server
 }
 
-// NewMain returns a new instance of Main.
-func NewMain(cfg config.Config, awsCfg aws.Config, log logPkg.Log) *Main {
-	var rDB = rdb.NewDB(cfg, log)
-	var iDB = idb.NewIDB(cfg, log)
-	var kDB = kdb.NewKDB(cfg, log)
-
-	return &Main{
+func NewApplication(cfg configPkg.Config) *Application {
+	return &Application{
 		Config:     cfg,
 		ConfigPath: DefaultConfigPath,
-		AwsConfig:  awsCfg,
-		Log:        log,
-		RDB:        rDB,
-		IDB:        iDB,
-		KDB:        kDB,
+		logger:     zap.L(),
 		HTTPServer: server.NewServer(cfg),
 	}
 }
 
-// Run executes the program. The configuration should already be set up before
-// calling this function.
-func (m *Main) Run(ctx context.Context) error {
-	m.Log.Info("Running application")
-	if err := m.RDB.Open(); err != nil {
-		return err
-	}
-	if err := m.IDB.Open(); err != nil {
-		return err
-	}
-	if err := m.KDB.Open(); err != nil {
+func (app *Application) Run() ce.CoreError {
+	app.logger.Info("Running application")
+
+	app.Database = database.New(app.Config)
+	if err := app.Database.Open(); err != nil {
 		return err
 	}
 
-	// Instantiate SQLite-backed services.
-	authnService := authn.NewService(m.Log, m.RDB)
-	tokenService := token.NewService(m.Log, m.IDB)
+	app.Cache = cachePkg.New(app.Config)
+	if err := app.Cache.Open(); err != nil {
+		return err
+	}
 
-	// Attach underlying services to the HTTP server.
-	m.HTTPServer.Log = m.Log
-	m.HTTPServer.AuthnService = authnService
-	m.HTTPServer.TokenService = tokenService
+	app.KeyValStore = kdb.New(app.Config)
+	if err := app.KeyValStore.Open(); err != nil {
+		return err
+	}
+
+	app.HTTPServer.RDB = app.Database
 
 	// Start the HTTP server.
-	if err := m.HTTPServer.Open(); err != nil {
+	if err := app.HTTPServer.Open(); err != nil {
 		return err
 	}
 
@@ -157,69 +131,69 @@ func (m *Main) Run(ctx context.Context) error {
 }
 
 // Terminate gracefully stops the program.
-func (m *Main) Terminate() error {
-	m.Log.Info("Start termination sequence")
-	if m.HTTPServer != nil {
-		err := m.HTTPServer.Shutdown()
+func (app *Application) Terminate() error {
+	app.logger.Info("Start termination sequence")
+	if app.HTTPServer != nil {
+		err := app.HTTPServer.Shutdown()
 		if err != nil {
 			return err
 		}
 	}
 
-	if m.RDB != nil {
-		if err := m.RDB.Close(); err != nil {
+	if app.Database != nil {
+		if err := app.Database.Close(); err != nil {
 			return err
 		}
 	}
 
-	if m.KDB != nil {
-		if err := m.KDB.Close(); err != nil {
+	if app.KeyValStore != nil {
+		if err := app.KeyValStore.Close(); err != nil {
 			return err
 		}
 	}
 
-	m.Log.Info("Finish termination sequence")
+	app.logger.Info("Finish termination sequence")
 	return nil
 }
 
-// ParseFlags parses the command line arguments & loads the config.
+// ParseFlags parses the command line arguments and loads the config.
 //
 // This exists separately from the Run() function so that we can skip it
 // during end-to-end tests. Those tests will configure manually and call Run().
-func (m *Main) ParseFlags(args []string) error {
+func (app *Application) ParseFlags(args []string) error {
 	// Our flag set is very simple. It only includes a config path.
 	fs := flag.NewFlagSet("main", flag.ContinueOnError)
-	fs.StringVar(&m.ConfigPath, "config", DefaultConfigPath, "config path")
+	fs.StringVar(&app.ConfigPath, "config", DefaultConfigPath, "config path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	// The expand() function is here to automatically expand "~" to the user's
-	// home directory. This is a common task as configuration files are typing
+	// home directory. This is a common task as configuration files are typed
 	// under the home directory during local development.
-	configPath, err := expand(m.ConfigPath)
+	configPath, err := expand(app.ConfigPath)
 	if err != nil {
 		return err
 	}
 
 	// Read our TOML formatted configuration file.
-	cfg, err := config.NewConfig(configPath, m.Log)
+	cfg, err := configPkg.NewConfig(configPath)
 	if os.IsNotExist(err) {
-		m.Log.Error(fmt.Sprintf("Config file not found at %s", m.ConfigPath))
+		app.logger.Error(fmt.Sprintf("config file not found at %s", app.ConfigPath))
 		return err
 	} else if err != nil {
-		m.Log.Error("Fail to parse flags", err)
+		app.logger.Error("Fail to parse flags", zap.Error(err))
 		return err
 	}
-	m.Config = cfg
-	m.Log.Info("Parse config")
+	app.Config = cfg
+	app.logger.Info("Parse config")
 	return nil
 }
 
-// expand returns path using tilde expansion. This means that a file path that
+// Expand a returned path using tilde expansion. This means that a file path that
 // begins with the "~" will be expanded to prefix the user's home directory.
 func expand(path string) (string, error) {
-	// Ignore if path has no leading tilde.
+	// Ignore if a path has no leading tilde.
 	if path != "~" && !strings.HasPrefix(path, "~"+string(os.PathSeparator)) {
 		return path, nil
 	}

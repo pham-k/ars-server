@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project structure
+- The main server setup and entrypoint is defined in cmd/api/main.go
+- The project is organized by domain-based folder structure
+
+# Folders
+- migrations: Flyway migration files
+- cmd/api: Entrypoints of the project
+- internal: Project files
+- internal/core: Core domain
+- internal/user: User domain
+

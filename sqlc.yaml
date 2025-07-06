@@ -1,12 +1,12 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "./migration"
-    queries: "./query"
+    queries: "internal/user/repository/sql/query"
+    schema: "internal/user/repository/sql/schema"
     gen:
       go:
-        package: "repository"
-        out: "internal/repository"
+        package: "sgen"
+        out: "internal/user/repository/sgen"
         overrides:
           - db_type: "pg_catalog.interval"
             engine: "postgresql"
@@ -14,3 +14,17 @@ sql:
               import: "time"
               type: "Duration"
         emit_json_tags: true
+#  - engine: "postgresql"
+#    schema: "./migration"
+#    queries: "./query"
+#    gen:
+#      go:
+#        package: "repository"
+#        out: "internal/repository"
+#        overrides:
+#          - db_type: "pg_catalog.interval"
+#            engine: "postgresql"
+#            go_type:
+#              import: "time"
+#              type: "Duration"
+#        emit_json_tags: true

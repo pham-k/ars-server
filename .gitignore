@@ -34,3 +34,9 @@ config.toml
 docker/mongo/data/
 docker/redis/data/
 docker/postgres/data/
+
+# Flyway ignores
+*.user.toml
+*.artifact
+report.html
+report.json

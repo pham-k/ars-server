@@ -4,7 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
-	"server/internal/helper"
+	"server/internal/core/helper"
 	"time"
 )
 
@@ -26,14 +26,14 @@ func (s *Server) NewRouter() chi.Router {
 	// processing should be stopped.
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Get("/v1/health-check", s.HandleHealthCheck())
+	r.Get("/health-check", s.HandleHealthCheck())
 
-	r.Route("/v1/authn/", func(router chi.Router) {
-		router.Post("/register-with-email", s.HandleRegisterWithEmail())
-		router.Get("/validate-email/{token}", s.ValidateEmail())
-		router.Post("/log-in-with-email", s.HandleLogInWithEmail())
-		//router.Post("/log-out", LogOut(app))
-	})
+	//r.Route("/v1/authn/", func(router chi.Router) {
+	//	router.Post("/register-with-email", s.HandleRegisterWithEmail())
+	//	router.Get("/validate-email/{token}", s.ValidateEmail())
+	//	router.Post("/logger-in-with-email", s.HandleLogInWithEmail())
+	//	//router.Post("/logger-out", LogOut(app))
+	//})
 
 	return r
 }

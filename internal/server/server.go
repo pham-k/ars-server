@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"net/http"
 	"path"
-	"server/internal/authn"
-	"server/internal/config"
-	"server/internal/log"
-	"server/internal/token"
+	"server/internal/core/config"
+	"server/internal/core/database"
+	ce "server/internal/core/error"
+	"server/internal/user/handler"
 	"strings"
 	"time"
 )
@@ -29,9 +30,10 @@ type Server struct {
 	Domain  string
 
 	// Services used by the various HTTP routes.
-	Log          log.Log
-	AuthnService authn.Service
-	TokenService token.Service
+	logger *zap.Logger
+	RDB    database.Database
+	//AuthnService authn.Service
+	//TokenService token.Service
 }
 
 // NewServer returns a new instance of Server.
@@ -45,30 +47,34 @@ func NewServer(cfg config.Config) *Server {
 			WriteTimeout: 30 * time.Second,
 		},
 		Address: address,
+		logger:  zap.L(),
 	}
 
 	return s
 }
 
 // Open validates the server options and begins listening on the bind address.
-func (s *Server) Open() (err error) {
+func (s *Server) Open() ce.CoreError {
 	router := s.NewRouter()
-	s.server.Handler = router
-	s.Log.Info("Attached router")
+	userHandler := handler.NewHandler(router, s.RDB)
+	userHandler.RegisterRoutes()
 
-	s.Log.Info(fmt.Sprintf("Starting HTTP server on %s", s.Address))
-	onListenAndServeErr := make(chan error, 1)
+	s.server.Handler = router
+
+	s.logger.Info(fmt.Sprintf("Starting HTTP server on %s", s.Address))
+	onListenAndServeErrChan := make(chan error, 1)
 	go func() {
 		err := s.server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			onListenAndServeErr <- err
+			onListenAndServeErrChan <- err
 		}
 	}()
-	s.Log.Info(fmt.Sprintf("HTTP server is listening on %v", s.Address))
+	s.logger.Info(fmt.Sprintf("HTTP server is listening on %v", s.Address))
 
-	err = <-onListenAndServeErr
-	if err != nil {
-		s.Log.Error("HTTP server", err)
+	listenAndServeErr := <-onListenAndServeErrChan
+	if listenAndServeErr != nil {
+		err := ce.New("Listen and serve", ce.WithErr(listenAndServeErr))
+		err.AddOp("Run HTTP server")
 		return err
 	}
 
@@ -116,10 +122,10 @@ func (s *Server) Shutdown() error {
 	// hit). We relay this return value to the shutdownErr channel.
 	err := s.server.Shutdown(ctx)
 	if err != nil {
-		s.Log.Error("HTTP server shutdown", "error", err)
+		s.logger.Error("HTTP server shutdown", zap.Error(err))
 		return err
 	}
 
-	s.Log.Info("HTTP server shutdown")
+	s.logger.Info("HTTP server shutdown")
 	return nil
 }

@@ -1,0 +1,31 @@
+databaseType = "PostgreSql"
+id = "8a3eb202-61df-4499-a937-3d1ab24ce027"
+name = "ars-server"
+
+[flyway]
+locations = [ "filesystem:migrations" ]
+mixed = true
+outOfOrder = true
+schemaModelLocation = "schema-model"
+validateMigrationNaming = true
+
+  [flyway.check]
+  majorTolerance = 0
+
+[flywayDesktop]
+developmentEnvironment = "development"
+shadowEnvironment = "shadow"
+enableMigrations = false
+
+[redgateCompare]
+filterFile = "filter.rgf"
+
+[redgateCompare.postgresql.options.behavior]
+detectRenames = "identical-only"
+
+[redgateCompare.postgresql.options.ignores]
+ignoreNewlinesInTextObjects = "off"
+
+[environments.ars-dev]
+url = "jdbc:postgresql://localhost:5433/ars-dev"
+schemas = [ "public" ]
