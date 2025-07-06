@@ -13,12 +13,18 @@ const (
 	PIDPrefixUser          = "usr"
 )
 
+var AnonymousUser = &User{}
+
 type User struct {
 	ID        int64  `json:"id"`
 	PID       string `json:"pid"`
 	Object    string `json:"object"`
 	AuthnType Type   `json:"authn_type"`
 	Email     string `json:"email"`
+}
+
+func (u *User) IsAnonymous() bool {
+	return u == AnonymousUser
 }
 
 type Service interface {
